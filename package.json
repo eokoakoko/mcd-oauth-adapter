@@ -1,0 +1,14 @@
+{
+  "name": "mcd-chatgpt-oauth-adapter",
+  "version": "1.0.0",
+  "description": "OAuth adapter for McDonald's China MCP",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "crypto": "^1.0.1"
+  }
+}
