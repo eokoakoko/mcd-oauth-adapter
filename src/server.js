@@ -160,7 +160,7 @@ app.all('/mcp', (req, res) => {
     return res.status(401).set('WWW-Authenticate', 'Bearer').json({ error: 'invalid_token', error_description: 'Access token expired or invalid' });
   }
 
-  const targetUrl = new URL(req.url, MCD_MCP_URL);
+  const targetUrl = new URL(MCD_MCP_URL);
   const options = {
     method: req.method,
     headers: {
