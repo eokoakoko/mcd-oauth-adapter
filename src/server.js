@@ -6,6 +6,16 @@ const { URL } = require('url');
 
 const app = express();
 
+// 聪明的中间件：解析 /mcp 以外的所有请求体
+app.use((req, res, next) => {
+  if (req.path.startsWith('/mcp')) return next(); // 跳过 /mcp，保留原始数据流
+  express.json()(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.path.startsWith('/mcp')) return next(); // 跳过 /mcp
+  express.urlencoded({ extended: true })(req, res, next);
+});
+
 // 读取环境变量
 const {
   PUBLIC_BASE_URL,
@@ -172,8 +182,6 @@ app.all('/mcp', (req, res) => {
 
   req.pipe(proxyReq);
 });
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // ============ 健康检查 ============
 app.get('/healthz', (req, res) => {
