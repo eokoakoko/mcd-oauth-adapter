@@ -126,6 +126,7 @@ app.post('/token', (req, res) => {
 
 // ============ 动态客户端注册 (DCR) ============
 app.post('/register', (req, res) => {
+  const redirectUris = req.body.redirect_uris || [];
   res.json({
     client_id: 'mcd-chatgpt-client',
     client_secret: crypto.randomBytes(16).toString('hex'),
@@ -134,6 +135,7 @@ app.post('/register', (req, res) => {
     response_types: ['code'],
     scope: 'mcp',
     token_endpoint_auth_method: 'none',
+    redirect_uris: redirectUris, // 👈 必须加上这一行，把地址原样还给客户端！
   });
 });
 
