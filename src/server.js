@@ -1,6 +1,9 @@
 const express = require('express');
 const axios = require('axios');
 const crypto = require('crypto');
+const http = require('http');
+const https = require('https');
+const { URL } = require('url');
 
 const app = express();
 app.use(express.json());
@@ -190,8 +193,8 @@ app.post('/register', (req, res) => {
 });
 
 // ============ MCP 代理 ============
-app.all('/mcp', async (req, res) => {
-  // 验证 Access Token
+app.all('/mcp', (req, res) => {
+  // 1. 验证 Access Token
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).set('WWW-Authenticate', 'Bearer').json({
@@ -199,6 +202,40 @@ app.all('/mcp', async (req, res) => {
       error_description: 'Missing or invalid access token'
     });
   }
+  const token = authHeader.substring(7);
+  if (!accessTokens.has(token)) {
+    return res.status(401).set('WWW-Authenticate', 'Bearer').json({
+      error: 'invalid_token',
+      error_description: 'Access token expired or invalid'
+    });
+  }
+
+  // 2. 构建目标 URL
+  const targetUrl = new URL(req.url, MCD_MCP_URL);
+  const options = {
+    method: req.method,
+    headers: {
+      ...req.headers,
+      'Authorization': `Bearer ${MCD_MCP_TOKEN}`,
+    },
+  };
+  delete options.headers.host; // 避免 host 冲突
+
+  // 3. 选择协议
+  const protocol = targetUrl.protocol === 'https:' ? https : http;
+
+  // 4. 流式代理
+  const proxyReq = protocol.request(targetUrl, options, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on('error', (err) => {
+    res.status(500).json({ error: 'upstream_error', message: err.message });
+  });
+
+  req.pipe(proxyReq);
+});
   
   const token = authHeader.substring(7);
   if (!accessTokens.has(token)) {
