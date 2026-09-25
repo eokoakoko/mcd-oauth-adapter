@@ -2,7 +2,7 @@
 
 版本：2026-09-16
 适用：想让 ChatGPT 官端自定义 MCP / App 接入麦当劳中国官方 MCP 的用户
-前置提醒：ChatGPT 账号需要能打开“开发者模式”和“自定义 MCP / App”入口。通常需要 Plus / Pro / Business / Enterprise / Education 等付费计划。免费账号可能没有入口。若没有，可看文末“免费替代方案”。
+前置提醒：ChatGPT 账号需要能打开“开发者模式”和“自定义 MCP / App”入口。通常需要 Plus / Pro / Business / Enterprise / Education 等付费计划。免费账号可能没有入口。若无，可看文末替代方案。
 
 ---
 
@@ -69,6 +69,17 @@ ChatGPT 官端
 mcd-oauth-adapter
 ```
 
+4. 文件结构
+
+- `src/server.js`：OAuth 适配器核心代码（含 Streamable HTTP 流式代理）
+- `Dockerfile`：Render 部署所需的 Docker 构建文件
+- `compose.yaml`：本地/服务器 Docker Compose 配置
+- `.env.example`：环境变量示例模板（请勿填入真实密钥）
+- `package.json`：项目依赖与启动脚本
+
+
+---
+
 最终文件结构：
 
 ```text
@@ -83,423 +94,7 @@ mcd-oauth-adapter/
 
 ---
 
-4. 关键文件内容
-
-4.1 Dockerfile
-
-```dockerfile
-FROM node:20-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install --omit=dev
-
-COPY src/ ./src/
-
-EXPOSE 8787
-
-CMD ["node", "src/server.js"]
-```
-
-4.2 package.json
-
-```json
-{
-  "name": "mcd-chatgpt-oauth-adapter",
-  "version": "1.0.0",
-  "description": "OAuth adapter for McDonald's China MCP",
-  "main": "src/server.js",
-  "scripts": {
-    "start": "node src/server.js"
-  },
-  "dependencies": {
-    "express": "^4.19.2"
-  }
-}
-```
-
-4.3 compose.yaml
-
-Render 部署可以不使用，但本地 Docker 调试可用。
-
-```yaml
-services:
-  adapter:
-    build: .
-    ports:
-      - "127.0.0.1:8787:8787"
-    env_file:
-      - .env
-    restart: unless-stopped
-```
-
-4.4 .env.example
-
-```env
-PUBLIC_BASE_URL=https://你的服务名.onrender.com
-PORT=8787
-MCD_MCP_URL=https://mcp.mcd.cn
-MCD_MCP_TOKEN=你的麦当劳Token
-ADAPTER_OWNER_PASSWORD=你自己设置的长密码
-```
-
-.env.example 只是模板，不要填真实秘密。真实秘密只在 Render 环境变量里填。
-
----
-
-5. 核心代码：src/server.js
-
-```javascript
-const express = require('express');
-const crypto = require('crypto');
-const http = require('http');
-const https = require('https');
-const { URL } = require('url');
-
-const app = express();
-
-const {
-  PUBLIC_BASE_URL,
-  PORT = 8787,
-  MCD_MCP_URL = 'https://mcp.mcd.cn',
-  MCD_MCP_TOKEN,
-  ADAPTER_OWNER_PASSWORD,
-  OAUTH_ACCESS_TOKEN_TTL_SECONDS = 900,
-  OAUTH_REFRESH_TOKEN_TTL_SECONDS = 2592000,
-  OAUTH_AUTHORIZATION_CODE_TTL_SECONDS = 300,
-} = process.env;
-
-if (!PUBLIC_BASE_URL) throw new Error('PUBLIC_BASE_URL is required');
-if (!MCD_MCP_TOKEN) throw new Error('MCD_MCP_TOKEN is required');
-if (!ADAPTER_OWNER_PASSWORD) throw new Error('ADAPTER_OWNER_PASSWORD is required');
-
-const authCodes = new Map();
-const accessTokens = new Map();
-const refreshTokens = new Map();
-const clients = new Map();
-
-function now() {
-  return Date.now();
-}
-
-function randomId(bytes = 32) {
-  return crypto.randomBytes(bytes).toString('hex');
-}
-
-function base64url(input) {
-  return Buffer.from(input).toString('base64url');
-}
-
-function sha256(input) {
-  return crypto.createHash('sha256').update(input).digest();
-}
-
-function verifyPkce(codeVerifier, codeChallenge) {
-  if (!codeChallenge) return true;
-  const computed = base64url(sha256(codeVerifier || ''));
-  return computed === codeChallenge;
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  }[c]));
-}
-
-// ========== /mcp 流式代理，必须放在 express.json() 之前 ==========
-app.all('/mcp', (req, res) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401)
-      .set('WWW-Authenticate', `Bearer resource_metadata="${PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp", scope="mcp"`)
-      .json({
-        error: 'unauthorized',
-        error_description: 'Missing access token',
-      });
-  }
-
-  const token = authHeader.slice(7);
-  const tokenData = accessTokens.get(token);
-
-  if (!tokenData) {
-    return res.status(401)
-      .set('WWW-Authenticate', `Bearer resource_metadata="${PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp", scope="mcp"`)
-      .json({
-        error: 'invalid_token',
-        error_description: 'Access token expired or invalid',
-      });
-  }
-
-  const targetUrl = new URL(MCD_MCP_URL);
-  targetUrl.pathname = req.path;
-  targetUrl.search = req.originalUrl.includes('?')
-    ? req.originalUrl.slice(req.originalUrl.indexOf('?'))
-    : '';
-
-  const headers = { ...req.headers };
-  delete headers.host;
-  delete headers['content-length'];
-  headers.authorization = `Bearer ${MCD_MCP_TOKEN}`;
-
-  const options = {
-    method: req.method,
-    headers,
-  };
-
-  const protocol = targetUrl.protocol === 'https:' ? https : http;
-
-  const proxyReq = protocol.request(targetUrl, options, (proxyRes) => {
-    res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
-    proxyRes.pipe(res);
-  });
-
-  proxyReq.on('error', (err) => {
-    if (!res.headersSent) {
-      res.status(502).json({
-        error: 'upstream_error',
-        message: err.message,
-      });
-    } else {
-      res.end();
-    }
-  });
-
-  req.pipe(proxyReq);
-});
-
-// ========== 解析器 ==========
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true }));
-
-// ========== OAuth Discovery ==========
-app.get('/.well-known/oauth-authorization-server', (req, res) => {
-  res.json({
-    issuer: PUBLIC_BASE_URL,
-    authorization_endpoint: `${PUBLIC_BASE_URL}/authorize`,
-    token_endpoint: `${PUBLIC_BASE_URL}/token`,
-    registration_endpoint: `${PUBLIC_BASE_URL}/register`,
-    response_types_supported: ['code'],
-    response_modes_supported: ['query'],
-    grant_types_supported: ['authorization_code', 'refresh_token'],
-    token_endpoint_auth_methods_supported: ['none'],
-    code_challenge_methods_supported: ['S256'],
-    authorization_response_iss_parameter_supported: true,
-  });
-});
-
-app.get('/.well-known/oauth-protected-resource/mcp', (req, res) => {
-  res.json({
-    resource: `${PUBLIC_BASE_URL}/mcp`,
-    authorization_servers: [PUBLIC_BASE_URL],
-    bearer_methods_supported: ['header'],
-    scopes_supported: ['mcp'],
-  });
-});
-
-// ========== 动态客户端注册 DCR ==========
-app.post('/register', (req, res) => {
-  const clientId = randomId(16);
-
-  const client = {
-    client_id: clientId,
-    client_id_issued_at: Math.floor(now() / 1000),
-    grant_types: ['authorization_code', 'refresh_token'],
-    response_types: ['code'],
-    scope: 'mcp',
-    token_endpoint_auth_method: 'none',
-  };
-
-  clients.set(clientId, client);
-  res.status(201).json(client);
-});
-
-// ========== 授权页 ==========
-app.get('/authorize', (req, res) => {
-  const { client_id, redirect_uri, code_challenge, state, scope } = req.query;
-
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com https://chat.openai.com; base-uri 'none'; frame-ancestors 'none'"
-  );
-
-  res.send(`<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>授权麦当劳 MCP</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 420px; margin: 60px auto; padding: 0 20px; }
-    h2 { margin-bottom: 8px; }
-    p { color: #555; line-height: 1.6; }
-    input[type="password"] { width: 100%; padding: 12px; margin: 8px 0 16px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-    button { width: 100%; padding: 12px; background: #111; color: white; border: 0; border-radius: 8px; font-size: 16px; }
-  </style>
-</head>
-<body>
-  <h2>🔑 授权麦当劳 MCP</h2>
-  <p>请输入适配器密码，授权 ChatGPT 访问你的麦当劳 MCP。</p>
-  <form method="POST" action="/authorize">
-    <input type="hidden" name="client_id" value="${escapeHtml(client_id || '')}" />
-    <input type="hidden" name="redirect_uri" value="${escapeHtml(redirect_uri || '')}" />
-    <input type="hidden" name="code_challenge" value="${escapeHtml(code_challenge || '')}" />
-    <input type="hidden" name="state" value="${escapeHtml(state || '')}" />
-    <input type="hidden" name="scope" value="${escapeHtml(scope || 'mcp')}" />
-    <input type="password" name="password" placeholder="适配器密码" autocomplete="current-password" required />
-    <button type="submit">允许</button>
-  </form>
-</body>
-</html>`);
-});
-
-app.post('/authorize', (req, res) => {
-  const { password, client_id, redirect_uri, code_challenge, state, scope } = req.body;
-
-  if (password !== ADAPTER_OWNER_PASSWORD) {
-    return res.status(401).send('密码错误，请返回重试。');
-  }
-
-  if (!redirect_uri) {
-    return res.status(400).send('缺少 redirect_uri');
-  }
-
-  const code = randomId(32);
-
-  authCodes.set(code, {
-    client_id,
-    redirect_uri,
-    code_challenge,
-    scope: scope || 'mcp',
-    created_at: now(),
-  });
-
-  setTimeout(() => authCodes.delete(code), OAUTH_AUTHORIZATION_CODE_TTL_SECONDS * 1000);
-
-  const url = new URL(redirect_uri);
-  url.searchParams.set('code', code);
-  if (state) url.searchParams.set('state', state);
-  url.searchParams.set('iss', PUBLIC_BASE_URL);
-
-  res.redirect(302, url.toString());
-});
-
-// ========== Token ==========
-app.post('/token', (req, res) => {
-  const { grant_type, code, redirect_uri, client_id, code_verifier, refresh_token } = req.body;
-
-  if (grant_type === 'authorization_code') {
-    const data = authCodes.get(code);
-    if (!data) {
-      return res.status(400).json({ error: 'invalid_grant' });
-    }
-
-    if (data.redirect_uri !== redirect_uri) {
-      return res.status(400).json({
-        error: 'invalid_grant',
-        error_description: 'redirect_uri mismatch',
-      });
-    }
-
-    if (data.client_id && client_id && data.client_id !== client_id) {
-      return res.status(400).json({
-        error: 'invalid_grant',
-        error_description: 'client_id mismatch',
-      });
-    }
-
-    if (!verifyPkce(code_verifier, data.code_challenge)) {
-      return res.status(400).json({
-        error: 'invalid_grant',
-        error_description: 'PKCE verification failed',
-      });
-    }
-
-    authCodes.delete(code);
-
-    const accessToken = randomId(32);
-    const newRefreshToken = randomId(32);
-
-    const tokenData = {
-      client_id: data.client_id,
-      scope: data.scope,
-      created_at: now(),
-    };
-
-    accessTokens.set(accessToken, tokenData);
-    refreshTokens.set(newRefreshToken, accessToken);
-
-    setTimeout(() => accessTokens.delete(accessToken), OAUTH_ACCESS_TOKEN_TTL_SECONDS * 1000);
-    setTimeout(() => refreshTokens.delete(newRefreshToken), OAUTH_REFRESH_TOKEN_TTL_SECONDS * 1000);
-
-    return res.json({
-      access_token: accessToken,
-      token_type: 'Bearer',
-      expires_in: OAUTH_ACCESS_TOKEN_TTL_SECONDS,
-      refresh_token: newRefreshToken,
-      scope: data.scope,
-    });
-  }
-
-  if (grant_type === 'refresh_token') {
-    const oldAccessToken = refreshTokens.get(refresh_token);
-    if (!oldAccessToken) {
-      return res.status(400).json({ error: 'invalid_grant' });
-    }
-
-    const tokenData = accessTokens.get(oldAccessToken);
-    if (!tokenData) {
-      return res.status(400).json({ error: 'invalid_grant' });
-    }
-
-    accessTokens.delete(oldAccessToken);
-
-    const accessToken = randomId(32);
-    accessTokens.set(accessToken, tokenData);
-
-    setTimeout(() => accessTokens.delete(accessToken), OAUTH_ACCESS_TOKEN_TTL_SECONDS * 1000);
-
-    return res.json({
-      access_token: accessToken,
-      token_type: 'Bearer',
-      expires_in: OAUTH_ACCESS_TOKEN_TTL_SECONDS,
-      scope: tokenData.scope,
-    });
-  }
-
-  res.status(400).json({ error: 'unsupported_grant_type' });
-});
-
-// ========== 健康检查 ==========
-app.get('/healthz', (req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'mcd-chatgpt-oauth-adapter',
-    oauth: 'ready',
-    upstream: 'not-contacted',
-    orderCreation: 'blocked',
-  });
-});
-
-app.get('/', (req, res) => {
-  res.type('text/plain').send('MCD ChatGPT OAuth Adapter is running. Try /healthz');
-});
-
-// ========== 启动 ==========
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
-  console.log(`🔗 Public URL: ${PUBLIC_BASE_URL}`);
-});
-```
-
----
-
-6. 在 Render 部署
+5. 在 Render 部署
 
 1. 打开 Render Dashboard，登录。
 2. 点击 New + → Web Service。
@@ -510,7 +105,7 @@ app.listen(PORT, '0.0.0.0', () => {
    · Region：Singapore
    · Branch：main
    · Plan：Free
-5. 环境变量只填这三个：
+6. 环境变量只填这三个：
 
 ```env
 PUBLIC_BASE_URL=https://你的服务名.onrender.com
@@ -520,6 +115,8 @@ ADAPTER_OWNER_PASSWORD=你自己设置的长密码
 
 PORT 不要填。Render 会自动注入。
 其他 TTL 变量不填会使用代码默认值。
+> ⚠️ 安全提示：`MCD_MCP_TOKEN` 和 `ADAPTER_OWNER_PASSWORD` 绝不能写进代码或提交到 GitHub。
+```
 
 6. 点击 Create Web Service。
 7. 等待 2~3 分钟，看到绿色 Live 即部署成功。
@@ -530,11 +127,12 @@ PORT 不要填。Render 会自动注入。
 
 把下面地址里的 你的服务名 换成你的 Render 服务名。
 
-7.1 健康检查
+7.1 健康检查&接口验证
 
-```text
-https://你的服务名.onrender.com/healthz
-```
+- 健康检查：`/healthz`
+- OAuth Discovery：`/.well-known/oauth-authorization-server`
+- 受保护资源元数据：`/.well-known/oauth-protected-resource/mcp`
+- MCP 主入口：`/mcp`（需 OAuth 访问令牌）
 
 正常返回：
 
