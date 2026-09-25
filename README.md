@@ -1,6 +1,6 @@
 从零部署麦当劳中国 MCP 的 ChatGPT OAuth 适配器（Render 版）
 
-版本：2026-09-16
+版本：2026-09-16 UPDATE：2026-9-25
 适用：想让 ChatGPT 官端自定义 MCP / App 接入麦当劳中国官方 MCP 的用户
 前置提醒：ChatGPT 账号需要能打开“开发者模式”和“自定义 MCP / App”入口。通常需要 Plus / Pro / Business / Enterprise / Education 等付费计划。免费账号可能没有入口。若无，可看文末替代方案。
 
@@ -51,12 +51,17 @@ ChatGPT 官端
 
 · 麦当劳中国官方 MCP Token
   申请地址：https://open.mcd.cn/mcp/doc
+  
 · 一个 GitHub 账号。
+
 · 一个 Render 账号：https://render.com
+
 · 一个 ChatGPT 账号，并且有“自定义 MCP / App”入口。
-· 两个秘密，务必分清：
+
+· 两个密码，务必分清：
   · MCD_MCP_TOKEN：麦当劳官方发给你的 Token。
   · ADAPTER_OWNER_PASSWORD：你自己新设的适配器授权密码。
+  
 · 桌面浏览器。OAuth 出问题时，Chrome / Edge 的 F12 Network 很有用。
 
 ---
