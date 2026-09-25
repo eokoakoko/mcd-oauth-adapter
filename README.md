@@ -1,8 +1,11 @@
 从零部署麦当劳中国 MCP 的 ChatGPT OAuth 适配器（Render 版）
 
 版本：2026-09-16 UPDATE：2026-9-25
+
 适用：想让 ChatGPT 官端自定义 MCP / App 接入麦当劳中国官方 MCP 的用户
-前置提醒：ChatGPT 账号需要能打开“开发者模式”和“自定义 MCP / App”入口。通常需要 Plus / Pro / Business / Enterprise / Education 等付费计划。免费账号可能没有入口。若无，可看文末替代方案。
+
+前置提醒：ChatGPT 账号需要能打开“开发者模式”和“自定义 MCP / App”入口。通常需要 Plus / Pro / Business / Enterprise / Education 等付费计划。
+免费账号可能没有入口。若无，可看文末替代方案。
 
 ---
 
