@@ -5,8 +5,6 @@ const https = require('https');
 const { URL } = require('url');
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // 读取环境变量
 const {
@@ -172,6 +170,8 @@ app.all('/mcp', (req, res) => {
 
   req.pipe(proxyReq);
 });
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ============ 健康检查 ============
 app.get('/healthz', (req, res) => {
