@@ -160,10 +160,15 @@ https://你的服务名.onrender.com/.well-known/oauth-authorization-server
 应包含：
 
 · issuer
+
 · authorization_endpoint
+
 · token_endpoint
+
 · registration_endpoint
+
 · code_challenge_methods_supported: ["S256"]
+
 · authorization_response_iss_parameter_supported: true
 
 6.3 Protected Resource Metadata
@@ -175,8 +180,11 @@ https://你的服务名.onrender.com/.well-known/oauth-protected-resource/mcp
 应返回：
 
 · resource
+
 · authorization_servers
+
 · bearer_methods_supported
+
 · scopes_supported
 
 7.4 匿名访问 /mcp 应被拒绝
@@ -303,11 +311,17 @@ POST /mcp -> 200
 11. 安全边界
 
 · MCD_MCP_TOKEN 只存在于 Render 环境变量。
+
 · ADAPTER_OWNER_PASSWORD 也只存在于 Render 环境变量。
+
 · GitHub 仓库中不要提交 .env 或任何真实密钥。
+
 · 不要在聊天、截图、日志或命令历史中暴露 Token 和密码。
+
 · 这是单用户适配器：所有连接者实际使用的是同一个麦当劳 MCP 身份。
+
 · 首次连接建议只做只读测试。
+
 · 开启下单能力前，必须确认风险，并保留用户确认机制。
 
 ---
@@ -318,15 +332,22 @@ POST /mcp -> 200
 
 1. 使用支持自定义 MCP 的开源客户端：
    · 5ire
+   
    · Open WebUI
+   
    · Cherry Studio
-2. 给这些客户端接入 LLM：
+   
+3. 给这些客户端接入 LLM：
    · 云端 API：OpenAI、Anthropic、OpenRouter 等。
+   
    · 本地模型：Ollama + 7B 左右小模型。
-3. 使用桥接工具：
+   
+5. 使用桥接工具：
    · Chat2Agent 等，让 ChatGPT 网页版通过官方 MCP 连接器访问本地工作区。
-4. 注意：
+   
+7. 注意：
    · 第三方工具存在账号风险，建议先用小号测试。
+   
    · 本流程主要针对有 ChatGPT 官端自定义 MCP 入口的用户。
 
 ---
