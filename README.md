@@ -101,16 +101,16 @@ mcd-oauth-adapter/
 
 5. 在 Render 部署
 
-1. 打开 Render Dashboard，登录。
-2. 点击 New + → Web Service。
-3. 连接 GitHub，选择你的 mcd-oauth-adapter 仓库。
-4. 配置：
+5.1. 打开 Render Dashboard，登录。
+. 点击 New + → Web Service。
+. 连接 GitHub，选择你的 mcd-oauth-adapter 仓库。
+5.2. 配置：
    · Name：你的服务名，例如 mcd-oauth-adapter
    · Language：Docker
    · Region：Singapore
    · Branch：main
    · Plan：Free
-6. 环境变量只填这三个：
+！. 环境变量只填这三个：
 
 ```env
 PUBLIC_BASE_URL=https://你的服务名.onrender.com
@@ -118,21 +118,21 @@ MCD_MCP_TOKEN=你的麦当劳Token
 ADAPTER_OWNER_PASSWORD=你自己设置的长密码
 ```
 
-PORT 不要填。Render 会自动注入。
+PORT 可不填。Render 会自动注入。
 其他 TTL 变量不填会使用代码默认值。
 > ⚠️ 安全提示：`MCD_MCP_TOKEN` 和 `ADAPTER_OWNER_PASSWORD` 绝不能写进代码或提交到 GitHub。
 ```
 
-6. 点击 Create Web Service。
-7. 等待 2~3 分钟，看到绿色 Live 即部署成功。
+. 点击 Create Web Service。
+. 等待 2~3 分钟，看到绿色 Live 即部署成功。
 
 ---
 
-7. 部署完成后的验证
+6. 部署完成后的验证
 
 把下面地址里的 你的服务名 换成你的 Render 服务名。
 
-7.1 健康检查&接口验证
+6.1 健康检查&接口验证
 
 - 健康检查：`/healthz`
 - OAuth Discovery：`/.well-known/oauth-authorization-server`
@@ -151,7 +151,7 @@ PORT 不要填。Render 会自动注入。
 }
 ```
 
-7.2 OAuth Discovery
+6.2 OAuth Discovery
 
 ```text
 https://你的服务名.onrender.com/.well-known/oauth-authorization-server
@@ -166,7 +166,7 @@ https://你的服务名.onrender.com/.well-known/oauth-authorization-server
 · code_challenge_methods_supported: ["S256"]
 · authorization_response_iss_parameter_supported: true
 
-7.3 Protected Resource Metadata
+6.3 Protected Resource Metadata
 
 ```text
 https://你的服务名.onrender.com/.well-known/oauth-protected-resource/mcp
@@ -189,7 +189,7 @@ https://你的服务名.onrender.com/mcp
 
 ---
 
-8. 在 ChatGPT 官端创建自定义 MCP / App
+7. 在 ChatGPT 官端创建自定义 MCP / App
 
 不同版本页面名称可能变化。常见流程：
 
@@ -215,7 +215,7 @@ Client ID / Client Secret 使用 DCR 时留空
 
 ---
 
-9. 正确 OAuth 流程
+8. 正确 OAuth 流程
 
 ```text
 ChatGPT 发起 OAuth
@@ -232,7 +232,7 @@ ChatGPT 发起 OAuth
 
 ---
 
-10. 建议的测试顺序
+9. 建议的测试顺序
 
 1. 先用 /healthz 确认服务活着。
 2. 再用 /.well-known/oauth-authorization-server 确认 OAuth 元数据。
@@ -245,20 +245,20 @@ ChatGPT 发起 OAuth
 
 ---
 
-11. 常见故障排查
+10. 常见故障排查
 
-11.1 授权密码错误
+10.1 授权密码错误
 
 现象：授权页提示密码不正确。
 处理：确认填的是 ADAPTER_OWNER_PASSWORD，不是 MCD_MCP_TOKEN。
 
-11.2 点击“允许”后没有跳转
+10.2 点击“允许”后没有跳转
 
 检查浏览器 F12 → Network，看最新 authorize 请求的 Response Headers。
 确认 Location 是否正确指向 ChatGPT。
 检查授权页 CSP 是否允许 form-action 'self' https://chatgpt.com https://chat.openai.com。
 
-11.3 /authorize 302 后没有 /token
+10.3 /authorize 302 后没有 /token
 
 检查 OAuth Discovery 是否包含：
 
@@ -268,7 +268,7 @@ ChatGPT 发起 OAuth
 
 并确认授权回调带了 iss 参数。
 
-11.4 Render 日志怎么看
+10.4 Render 日志怎么看
 
 正常 OAuth 流程常见顺序：
 
@@ -281,26 +281,26 @@ POST /mcp -> 200
 
 如果只停在 POST /authorize -> 302，没有 /token，问题通常发生在浏览器回调或 ChatGPT 接收回调阶段。
 
-11.5 502 upstream_auth_failed
+10.5 502 upstream_auth_failed
 
 通常表示访问麦当劳 MCP 时上游 Token 无效或权限不足。
 检查 Render 环境变量里的 MCD_MCP_TOKEN。不要把值发到聊天里。
 
-11.6 429
+10.6 429
 
 麦当劳官方文档写明每个 Token 每分钟最多 600 次请求。不要高频轮询。
 
-11.7 Render 第一次请求很慢
+10.7 Render 第一次请求很慢
 
 免费实例空闲后会休眠。重新访问 /healthz 唤醒，等服务恢复再继续 OAuth。
 
-11.8 根路径返回 Cannot GET /
+10.8 根路径返回 Cannot GET /
 
 这是正常的。因为适配器只开放 /healthz、/authorize、/token、/register、/mcp 等路径，没有定义 /。请访问 /healthz。
 
 ---
 
-12. 安全边界
+11. 安全边界
 
 · MCD_MCP_TOKEN 只存在于 Render 环境变量。
 · ADAPTER_OWNER_PASSWORD 也只存在于 Render 环境变量。
@@ -312,7 +312,7 @@ POST /mcp -> 200
 
 ---
 
-13. 免费替代方案：没有 ChatGPT Plus 怎么办？
+12. 免费替代方案：没有 ChatGPT Plus 怎么办？
 
 如果你没有 ChatGPT Plus / Pro，无法打开开发者模式和自定义 MCP / App，可以考虑：
 
@@ -331,7 +331,7 @@ POST /mcp -> 200
 
 ---
 
-14. 参考链接
+13. 参考链接
 
 · 麦当劳中国 MCP 官方平台：https://open.mcd.cn/mcp
 · 麦当劳中国 MCP 官方文档：https://open.mcd.cn/mcp/doc
