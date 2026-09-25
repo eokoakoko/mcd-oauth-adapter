@@ -126,7 +126,7 @@ app.post('/token', (req, res) => {
 
 // ============ 动态客户端注册 (DCR) ============
 app.post('/register', (req, res) => {
-  const redirectUris = req.body.redirect_uris || [];
+  const redirectUris = (req.body && req.body.redirect_uris) ? req.body.redirect_uris : [];
   res.json({
     client_id: 'mcd-chatgpt-client',
     client_secret: crypto.randomBytes(16).toString('hex'),
