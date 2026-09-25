@@ -334,6 +334,7 @@ POST /mcp -> 200
 如果你没有 ChatGPT Plus / Pro，无法打开开发者模式和自定义 MCP / App，可以考虑：
 
 1. 使用支持自定义 MCP 的开源客户端：
+   
    · 5ire
    
    · Open WebUI
@@ -341,6 +342,7 @@ POST /mcp -> 200
    · Cherry Studio
    
 3. 给这些客户端接入 LLM：
+   
    · 云端 API：OpenAI、Anthropic、OpenRouter 等。
    
    · 本地模型：Ollama + 7B 左右小模型。
@@ -349,6 +351,7 @@ POST /mcp -> 200
    · Chat2Agent 等，让 ChatGPT 网页版通过官方 MCP 连接器访问本地工作区。
    
 7. 注意：
+   
    · 第三方工具存在账号风险，建议先用小号测试。
    
    · 本流程主要针对有 ChatGPT 官端自定义 MCP 入口的用户。
